@@ -2228,7 +2228,7 @@ function togglePaymentLogos() {
 // Auf true setzen, um Stripe wieder anzubieten (Stripe-Konto muss freigeschaltet
 // sein). PayPal wird an diesem Standort nicht angeboten. Die Backend-Endpunkte
 // bleiben bestehen, ebenso die ENV-Variablen in render.yaml.
-window.ONLINE_ZAHLUNG_AKTIV = false;
+window.ONLINE_ZAHLUNG_AKTIV = true;
 
 function applyZahlungsarten() {
   var sel = document.getElementById('c-zahlung');
