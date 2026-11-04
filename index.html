@@ -2585,10 +2585,8 @@ async function processOrder() {
 // ─── KUNDE: WARTEN AUF DIE ANNAHME DURCH DAS RESTAURANT ──────────
 // Nach dem Absenden sieht der Kunde einen Wartebildschirm. Das "Okay" gibt es
 // erst, wenn das Restaurant die Bestellung im Dashboard angenommen hat.
-const KONTAKT_TEL_HREF = 'tel:+4925218579479';
-const KONTAKT_TEL_TEXT = '02521 / 857 94 79';
 const WARTE_INTERVALL  = 3000;           // Abstand zweier Statusabfragen
-const WARTE_TIMEOUT    = 5 * 60 * 1000;  // danach Telefonnummer anbieten
+const WARTE_TIMEOUT    = 5 * 60 * 1000;  // danach Hinweis "noch nicht bestaetigt"
 const WARTE_SPEICHER   = 'pinoccio-beckumWartendeBestellung';
 
 let warteTimer = null;   // laufendes Intervall
@@ -2679,7 +2677,6 @@ async function warteTick() {
         const grund = d.cancelReason ? '<br><br>Grund: <em>' + d.cancelReason + '</em>' : '';
         zeigeBestellZustand('❌', 'Bestellung abgelehnt',
             'Leider konnte deine Bestellung nicht angenommen werden.' + grund
-            + '<br><br>Bitte ruf uns an: <strong><a href="' + KONTAKT_TEL_HREF + '" style="color:var(--pinocciobeckum-gruen)">' + KONTAKT_TEL_TEXT + '</a></strong>'
             + '<br>Eine bereits geleistete Zahlung wird vollständig zurückerstattet.',
             '', 'OK');
     } else if (d.status && d.status !== 'pending') {
@@ -2711,13 +2708,12 @@ function zeigeOhneStatusabfrage() {
 }
 
 // Nach fünf Minuten ohne Antwort: die Bestellung bleibt gültig, aber der Kunde
-// bekommt einen Weg nachzufragen -- statt eines Spinners, der ewig dreht.
+// bekommt einen Hinweis -- statt eines Spinners, der ewig dreht.
 function zeigeKeineRueckmeldung() {
     const num = warteDaten && warteDaten.num ? ' <strong>#' + String(warteDaten.num).replace(/^#/, '') + '</strong>' : '';
-    zeigeBestellZustand('📞', 'Wir haben deine Bestellung',
+    zeigeBestellZustand('⏳', 'Wir haben deine Bestellung',
         'Deine Bestellung' + num + ' liegt beim Restaurant vor, ist aber noch nicht bestätigt. '
-        + 'Bei viel Betrieb kann das etwas dauern – sobald sie angenommen ist, bekommst du eine E-Mail.'
-        + '<br><br>Du willst sichergehen? Ruf uns an: <strong><a href="' + KONTAKT_TEL_HREF + '" style="color:var(--pinocciobeckum-gruen)">' + KONTAKT_TEL_TEXT + '</a></strong>',
+        + 'Bei viel Betrieb kann das etwas dauern – sobald sie angenommen ist, bekommst du eine E-Mail.',
         '', 'Schließen');
 }
 
