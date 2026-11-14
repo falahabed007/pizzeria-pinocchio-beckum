@@ -1317,7 +1317,7 @@ async function sendConfirmationEmail(order, mins) {
         <div style="background:#f7f3ee;padding:14px;text-align:center;font-size:11px;color:#999">Pizzeria Pinocchio · Stromberger Str. 135 · 59269 Beckum · Tel: 02521 / 857 94 79</div>
       </div>`
     });
-    console.log(`📧 Bestätigung → ${order.customer.email}`);
+    console.log(`📧 Bestätigung → Bestellung #${order.orderNum}`);
   } catch(e) { console.error('Mail Fehler:', e); }
 }
 
