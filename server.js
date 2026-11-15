@@ -9,6 +9,7 @@ const bcrypt     = require('bcryptjs');
 const jwt        = require('jsonwebtoken');
 const crypto     = require('crypto');
 const fs         = require('fs');
+const { webBestellungAusRequest } = require('./bestellung');
 require('dotenv').config();
 
 const app  = express();
@@ -593,8 +594,14 @@ function lieferungGesperrt(body) {
 }
 const NUR_ABHOLUNG_MSG = 'Die Abholer-Angebote (Super Angebot, Maxi Angebot) können nicht geliefert werden. Bitte wähle Abholung oder nimm sie aus dem Warenkorb.';
 
+// Nur Barzahlung von der Bestellseite. Den früheren POS-Weg (source 'pos':
+// sofort bestätigt, Betrag aus dem Request, Mails und Druck) gibt es nicht
+// mehr – siehe bestellung.js.
 app.post('/api/orders', async (req, res) => {
   try {
+    const auswahl = webBestellungAusRequest(req.body);
+    if (auswahl.fehler) return res.status(400).json({ message: auswahl.fehler });
+
     if (lieferungGesperrt(req.body)) return res.status(400).json({ message: NUR_ABHOLUNG_MSG });
     // userId aus Kunden-JWT extrahieren falls vorhanden (Gastbestellung bleibt möglich)
     let userId = null;
@@ -607,7 +614,6 @@ app.post('/api/orders', async (req, res) => {
     }
 
     const orderNum = await getNextOrderNum();
-    const isPOS    = req.body.source === 'pos';
 
     // Rabatt nicht aus dem Request übernehmen, sondern selbst rechnen
     const rabatt = berechneRabatt(req.body);
@@ -617,18 +623,12 @@ app.post('/api/orders', async (req, res) => {
     ) * 100) / 100;
 
     const order    = new Order({
-      ...req.body, orderNum, userId,
+      ...auswahl.felder, orderNum, userId,
       discount: rabatt,
-      total:    isPOS ? req.body.total : gesamt,
+      total:    gesamt,
       coupon:   rabatt > 0 ? RABATT_CODE : null,
-      status: isPOS ? 'confirmed' : 'pending'
     });
     await order.save();
-    if (isPOS) {
-      await sendConfirmationEmail(order, order.prepTime || 20);
-      await sendRestaurantEmail(order);
-      await triggerPrint(order);
-    }
     res.status(201).json({ orderNum: order.orderNum, statusToken: order.statusToken, order });
   } catch(e) { console.error(e); res.status(500).json({ message: 'Fehler beim Speichern' }); }
 });
@@ -1185,7 +1185,7 @@ app.post('/api/admin/orders/:id/print', auth, async (req, res) => {
 // Die Sammlung kennt nur Artikel, die schon einmal umgeschaltet wurden. Die Kasse
 // zeigt aber genau das, was dieser Endpunkt liefert - ohne die Karte bliebe ihre
 // Liste fast leer. Deshalb kommen die Namen aus Menue/menu.json, derselben Quelle,
-// aus der karte-einsetzen.js das POS_MENU des Dashboards erzeugt.
+// aus der karte-einsetzen.js frueher das POS_MENU des (entfernten) Web-Dashboards erzeugte.
 const MENU_FILE = path.join(__dirname, 'Menue', 'menu.json');
 let menuNamesCache = { mtimeMs: 0, names: [] };
 
@@ -1476,7 +1476,7 @@ const WACHHUND_MINUTEN = 10;
 // Obere Altersgrenze, und die ist nicht optional. Ohne sie greift der
 // Wachhund beim ersten Lauf nach JEDER haengenden Bestellung - in einer
 // bestehenden Installation also nach allem seit Monaten. Die Liste der eingehenden
-// Bestellungen im Dashboard hat keine Datumsgrenze und sortiert die aeltesten
+// Bestellungen (damals im Web-Dashboard) hat keine Datumsgrenze und sortiert die aeltesten
 // nach oben: Mitten im Betrieb stuende dort eine Wand aus Monate alten
 // "neuen" Bestellungen, jede mit Alarmton. Und weil "pending" im Umsatz
 // zaehlt, aenderten sich rueckwirkend Berichte und Gebuehren.
@@ -1537,10 +1537,10 @@ async function wachhundMelden(bestellungen) {
     to: empfaenger,
     subject: `🚨 ${bestellungen.length} bezahlte Bestellung${bestellungen.length > 1 ? 'en' : ''} war${bestellungen.length > 1 ? 'en' : ''} unsichtbar`,
     html: `<div style="font-family:Arial,sans-serif;max-width:560px;color:#222">
-      <h2 style="font-size:18px;margin:0 0 8px">Bezahlt, aber nicht im Dashboard angekommen</h2>
+      <h2 style="font-size:18px;margin:0 0 8px">Bezahlt, aber nicht in der App angekommen</h2>
       <p style="margin:0 0 12px">Diese Bestellung${bestellungen.length > 1 ? 'en' : ''} stand${bestellungen.length > 1 ? 'en' : ''}
       laenger als ${WACHHUND_MINUTEN} Minuten auf "wartet auf Zahlung", obwohl bei Stripe bezahlt wurde.
-      Sie wurde${bestellungen.length > 1 ? 'n' : ''} soeben nachgeholt und ist jetzt im Dashboard sichtbar.</p>
+      Sie wurde${bestellungen.length > 1 ? 'n' : ''} soeben nachgeholt und ist jetzt in der App sichtbar.</p>
       <table style="font-size:14px;border-collapse:collapse">${zeilen}</table>
       <p style="margin:16px 0 0;font-size:13px;color:#666">
         Der Gast wartet entsprechend laenger. Ursache ist fast immer der Stripe-Webhook:
@@ -1616,7 +1616,7 @@ function pdfTableRow(doc, cells, shade, bold = false) {
 }
 
 // Ohne Gastnamen: Die Berichte gehen per Mail an Inhaber und teils an den Steuerberater, dafuer reicht die
-// Bestellnummer (Datenminimierung, Abed 01.11.2026). Name und Kontaktdaten stehen nur im Dashboard.
+// Bestellnummer (Datenminimierung, Abed 01.11.2026). Name und Kontaktdaten stehen nur in der App.
 function pdfKundenliste(doc, orders) {
   function drawGroup(label, color, list) {
     if (!list.length) return;
